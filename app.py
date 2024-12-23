@@ -7,6 +7,7 @@ import re
 import numpy as np
 import cmudict
 from io import BytesIO
+import os
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -229,4 +230,5 @@ def predict():
     return jsonify({'phoneme_labels': phoneme_labels})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = os.environ.get("PORT", 5000)  # Default to 5000 if PORT is not set
+    app.run(host="0.0.0.0", port=int(port))
