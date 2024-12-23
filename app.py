@@ -181,6 +181,11 @@ def convert_words_to_phonemes(words, cmu_dict):
       phonemes.append('<UNK>')  # Append 'UNK' for unknown words
   return phonemes
 
+# health check
+@app.route("/")
+def home():
+    return "Hello, World!"
+
 # RUN
 @app.route('/predict', methods=['POST'])
 # taking in both audio and transcript from the user
@@ -230,5 +235,5 @@ def predict():
     return jsonify({'phoneme_labels': phoneme_labels})
 
 if __name__ == '__main__':
-    port = os.environ.get("PORT", 5000)  # Default to 5000 if PORT is not set
+    port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
     app.run(host="0.0.0.0", port=int(port))
