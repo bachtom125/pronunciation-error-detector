@@ -8,6 +8,11 @@ import numpy as np
 import cmudict
 from io import BytesIO
 import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+cmu = cmudict.dict()
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -184,14 +189,12 @@ def convert_words_to_phonemes(words, cmu_dict):
 # health check
 @app.route("/")
 def home():
-    return "Hello, World!"
+    return "Healthy bro!"
 
-# RUN
-@app.route('/predict', methods=['POST'])
 # taking in both audio and transcript from the user
+@app.route('/predict', methods=['POST'])
 def predict():
-    cmu = cmudict.dict()
-
+    logging.info("Received prediction request!")
     # Get audio file and transcript from the request
     if 'audio' not in request.files or 'transcript' not in request.form:
         return jsonify({'error': 'Audio file and transcript are required'}), 400
@@ -236,4 +239,5 @@ def predict():
 
 if __name__ == '__main__':
     port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
+    logging.info(f"PORT {int(port)}")
     app.run(host="0.0.0.0", port=int(port))
