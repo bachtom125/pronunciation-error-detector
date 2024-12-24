@@ -1,4 +1,8 @@
-from flask import Flask, request, jsonify
+
+from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi.responses import JSONResponse
+import uvicorn
+from typing import List
 import torch
 import librosa
 import soundfile as sf
@@ -14,8 +18,8 @@ logging.basicConfig(level=logging.INFO)
 
 cmu = cmudict.dict()
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize FastAPI app
+app = FastAPI()
 
 # Load the processor and model
 MODEL_NAME = "mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme" # wav2vec based phoneme trascriber trained on L2-ARTIC
@@ -187,56 +191,68 @@ def convert_words_to_phonemes(words, cmu_dict):
   return phonemes
 
 # health check
-@app.route("/")
+@app.get("/")
 def home():
     return "Healthy bro!"
 
 # taking in both audio and transcript from the user
-@app.route('/predict', methods=['POST'])
-def predict():
-    logging.info("Received prediction request!")
-    # Get audio file and transcript from the request
-    if 'audio' not in request.files or 'transcript' not in request.form:
-        return jsonify({'error': 'Audio file and transcript are required'}), 400
+@app.post("/predict")
+async def predict(audio: UploadFile, transcript: str = Form(...)):
+    """
+    Predict phoneme labels from uploaded audio and provided transcript.
 
-    audio_file = request.files['audio']
-    transcript = request.form['transcript']
-    
+    Args:
+        audio (UploadFile): Uploaded audio file (WAV/MP3).
+        transcript (str): Ground truth transcript.
+
+    Returns:
+        JSONResponse: Contains phoneme labels.
+    """
+    logging.info("Received prediction request!")
+
     # Validate file extension
-    allowed_extensions = {'wav', 'mp3'}
-    filename = audio_file.filename.lower()
+    allowed_extensions = {"wav", "mp3"}
+    filename = audio.filename.lower()
 
     if not filename.endswith(tuple(allowed_extensions)):
-        return jsonify({'error': 'Invalid file type. Only WAV and MP3 files are supported.'}), 400
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only WAV and MP3 files are supported.",
+        )
 
-    # Load audio and normalize
     # Load and preprocess the audio
-    audio_bytes = BytesIO(audio_file.read())
-    audio_input, sr = librosa.load(audio_bytes, sr=16000)
-    input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
-    input_values = input_values.to(device)
+    try:
+        audio_bytes = BytesIO(await audio.read())
+        audio_input, sr = librosa.load(audio_bytes, sr=16000)
+        input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
+        input_values = input_values.to(device)
 
-    # Perform inference
-    with torch.no_grad():
-        logits = model(input_values).logits
+        # Perform inference
+        with torch.no_grad():
+            logits = model(input_values).logits
 
-    # Decode the phonemes
-    predicted_ids = torch.argmax(logits, dim=-1)
-    uttured_transcript = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+        # Decode the phonemes
+        predicted_ids = torch.argmax(logits, dim=-1)
+        uttured_transcript = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
 
-    # convert uttered ipa into SAMPA (for comparison)
-    uttured_phons = convert_ipa_to_arpabet(uttured_transcript.split())
+        # Convert uttered IPA into SAMPA (for comparison)
+        uttured_phons = convert_ipa_to_arpabet(uttured_transcript.split())
 
-    # convert ground truth text into SAMPA (for comparison), and remove (ignore) stress markers (may upgrade to evaluate stress also later)
-    trans_phons = [convert_words_to_phonemes([word], cmu) for word in transcript.split()]
-    cleaned_trans_phons = remove_numbers_from_phonemes(trans_phons)
+        # Convert ground truth text into SAMPA (for comparison) and remove stress markers
+        trans_phons = [convert_words_to_phonemes([word], cmu) for word in transcript.split()]
+        cleaned_trans_phons = remove_numbers_from_phonemes(trans_phons)
+
+        # Generate labels
+        alignment = align_phoneme_sequences(cleaned_trans_phons, uttured_phons)
+        phoneme_labels = generate_phoneme_labels(alignment)
+
+        return JSONResponse(content={"phoneme_labels": phoneme_labels})
     
-    # Generate labels
-    alignment = align_phoneme_sequences(cleaned_trans_phons, uttured_phons)
-    phoneme_labels = generate_phoneme_labels(alignment)
-    
-    return jsonify({'phoneme_labels': phoneme_labels})
+    except Exception as e:
+        logging.error(f"Error during prediction: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred during processing.")
 
 if __name__ == '__main__':
-    logging.info("Starting Streamlit app...")
-    # os.system("streamlit run app.py")
+    port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
+    logging.info(f"Starting server on PORT {port}")
+    uvicorn.run("app:app", host="0.0.0.0", port=int(port), log_level="info")
