@@ -238,6 +238,5 @@ def predict():
     return jsonify({'phoneme_labels': phoneme_labels})
 
 if __name__ == '__main__':
-    port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
-    logging.info(f"PORT {int(port)}")
-    app.run(host="0.0.0.0", port=int(port))
+    logging.info("Starting Streamlit app...")
+    os.system("streamlit run app.py")
