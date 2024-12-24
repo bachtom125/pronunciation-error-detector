@@ -239,4 +239,4 @@ def predict():
 
 if __name__ == '__main__':
     logging.info("Starting Streamlit app...")
-    os.system("streamlit run app.py")
+    # os.system("streamlit run app.py")
