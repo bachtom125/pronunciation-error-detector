@@ -1,0 +1,12 @@
+# Ignore unnecessary files
+.git
+__pycache__
+*.pyc
+*.pyo
+*.log
+*.tmp
+*.zip
+*.tar.gz
+Datasets/
+.venv/
+Audios/
