@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from typing import List
 import torch
-import librosa
 import soundfile as sf
 from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 import re
@@ -15,8 +14,11 @@ import os
 import logging
 from joblib import Memory
 
-# Disable caching by assigning a dummy Memory object
-librosa.cache = Memory(location=None)
+import os
+
+# Set the Numba cache directory to a writable location
+os.environ["NUMBA_CACHE_DIR"] = "/tmp"
+import librosa
 
 logging.basicConfig(level=logging.INFO)
 
@@ -193,15 +195,6 @@ def convert_words_to_phonemes(words, cmu_dict):
     else:
       phonemes.append('<UNK>')  # Append 'UNK' for unknown words
   return phonemes
-
-# log url
-@app.on_event("startup")
-async def startup_event():
-    port = os.getenv("PORT", "7860")  # Default to 7860 if PORT is not set
-    base_url = f"https://{os.getenv('HF_SPACE_ID')}.hf.space"
-    logging.info(f"Application is running!")
-    logging.info(f"Root URL: {base_url}/")
-    logging.info(f"Predict Endpoint: {base_url}/predict")
 
 # health check
 @app.get("/")
