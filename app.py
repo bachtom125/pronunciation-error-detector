@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from typing import List
 import torch
+import librosa
 import soundfile as sf
 from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 import re
@@ -12,11 +13,10 @@ import cmudict
 from io import BytesIO
 import os
 import logging
+from joblib import Memory
 
-# handles librosa caching
-os.environ["LIBROSA_CACHE_DIR"] = "/tmp/librosa"
-os.makedirs("/tmp/librosa", exist_ok=True)
-import librosa
+# Disable caching by assigning a dummy Memory object
+librosa.cache = Memory(location=None)
 
 logging.basicConfig(level=logging.INFO)
 
