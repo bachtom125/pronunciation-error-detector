@@ -25,7 +25,7 @@ RUN mkdir -p /workspace/transformers_cache && chmod -R 777 /workspace/transforme
 COPY . .
 
 # Expose the application port
-EXPOSE 8000
+EXPOSE 7860
 
 # Run the FastAPI application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
