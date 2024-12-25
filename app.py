@@ -190,6 +190,15 @@ def convert_words_to_phonemes(words, cmu_dict):
       phonemes.append('<UNK>')  # Append 'UNK' for unknown words
   return phonemes
 
+# log url
+@app.on_event("startup")
+async def startup_event():
+    port = os.getenv("PORT", "7860")  # Default to 7860 if PORT is not set
+    base_url = f"https://{os.getenv('HF_SPACE_ID')}.hf.space"
+    logging.info(f"Application is running!")
+    logging.info(f"Root URL: {base_url}/")
+    logging.info(f"Predict Endpoint: {base_url}/predict")
+
 # health check
 @app.get("/")
 def home():
