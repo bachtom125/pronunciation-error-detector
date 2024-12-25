@@ -15,7 +15,7 @@ import logging
 
 # handles librosa caching
 os.environ["LIBROSA_CACHE_DIR"] = "/tmp/librosa"
-os.makedirs(cache_dir, exist_ok=True)
+os.makedirs("/tmp/librosa", exist_ok=True)
 import librosa
 
 logging.basicConfig(level=logging.INFO)
