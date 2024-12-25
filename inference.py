@@ -5,6 +5,8 @@ from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 import re
 import numpy as np
 import cmudict
+import os
+os.environ["LIBROSA_CACHE_DIR"] = "/tmp"
 
 # Load the processor and model
 MODEL_NAME = "mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme" # wav2vec based phoneme trascriber trained on L2-ARTIC
