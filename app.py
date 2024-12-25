@@ -252,7 +252,7 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         logging.error(f"Error during prediction: {e}")
         raise HTTPException(status_code=500, detail="An error occurred during processing.")
 
-if __name__ == '__main__':
-    port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
-    logging.info(f"Starting server on PORT {port}")
-    uvicorn.run("app:app", host="0.0.0.0", port=int(port), log_level="info")
+# if __name__ == '__main__':
+#     port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
+#     logging.info(f"Starting server on PORT {port}")
+#     uvicorn.run("app:app", host="0.0.0.0", port=int(port), log_level="info")
