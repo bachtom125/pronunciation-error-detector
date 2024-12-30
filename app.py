@@ -48,7 +48,7 @@ ipa_phonemes = [
     "i", "y", "ɨ", "ʉ", "ɪ", "ʏ", "e", "ø", "ɘ", "ɵ", "ə", "ɛ", "œ", "æ", "a", "ɶ", 
     "ɒ", "ʌ", "ɔ", "o", "ɤ", "u", "ɯ", "ʊ", "ɜ", "ɞ", "ɐ",  # Monophthongs
     "ɚ", "ɝ",  # Rhotacized vowels
-    "aɪ", "aʊ", "ɔɪ", "eɪ", "oʊ",  # Common diphthongs in English
+    "aɪ", "aʊ", "ɔɪ", "eɪ", "oʊ", "ɑ", # Common diphthongs in English
     # Consonants
     "p", "b", "t", "d", "k", "g", "ʔ",  # Plosives
     "m", "ɱ", "n", "ɳ", "ɲ", "ŋ", "ɴ",  # Nasals
