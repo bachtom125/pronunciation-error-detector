@@ -425,7 +425,7 @@ def map_phonemes_to_segments(phoneme_labels, word):
     Returns:
         list: List of tuples, each containing a phoneme and its corresponding segment.
     """
-    result = []
+    result = {"word": word, "details": []}
     remaining_word = word
 
     for phoneme_tup in phoneme_labels:
@@ -460,10 +460,18 @@ def map_phonemes_to_segments(phoneme_labels, word):
 
         # Add skipped characters to the result as silent graphemes
         for char in skipped_characters:
-            result.append((('', 1), char))
+            result["details"].append({
+                "phoneme": "",  # No phoneme
+                "word_segment": char,
+                "label": 1  # Assuming label for silent graphemes is 1
+            })
 
         # Add the phoneme and matched spelling to the result
-        result.append((phoneme_tup, matched_spelling))
+        result["details"].append({
+            "phoneme": phoneme_tup[0],
+            "word_segment": matched_spelling,
+            "label": phoneme_tup[1]  # Assuming `phoneme_tup[1]` is the label
+        })
 
         # Update the remaining word by removing the matched spelling
         if matched_spelling:
