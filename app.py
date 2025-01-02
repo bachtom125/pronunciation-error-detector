@@ -57,7 +57,7 @@ def load_audio(audio_path, target_sr=16000):
 
 def transcribe_into_English(audio_input):
     # Load audio file
-    audio_input = whisper_processor(audio_input, sampling_rate=16000, return_tensors="pt")
+    audio_input = whisper_processor(audio_input, sampling_rate=16000, return_tensors="pt").to(device)
 
     # Perform transcription
     with torch.no_grad():
