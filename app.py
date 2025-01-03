@@ -778,9 +778,8 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
         input_values = input_values.to(device)
 
-        # Get transcript
-        transcript = transcribe_into_English(audio_input)
-        transcript = clean_text(transcript)
+        # clean transcript
+        transcript = clean_text(transcript).strip()
         print(f"Transcript: {transcript}")
 
         # Perform inference
@@ -805,6 +804,46 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
     
     except Exception as e:
         logging.error(f"Error during prediction: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred during processing.")
+
+# taking in audio only and returning the transcript
+@app.post("/transcribe")
+async def transcribe(audio: UploadFile):
+    """
+    Transcribe the uploaded audio and return the transcript.
+
+    Args:
+        audio (UploadFile): Uploaded audio file (WAV/MP3).
+
+    Returns:
+        JSONResponse: Contains the transcript.
+    """
+    logging.info("Received transcription request!")
+
+    # Validate file extension
+    allowed_extensions = {"wav", "mp3"}
+    filename = audio.filename.lower()
+
+    if not filename.endswith(tuple(allowed_extensions)):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only WAV and MP3 files are supported.",
+        )
+
+    # Load and preprocess the audio
+    try:
+        audio_bytes = BytesIO(await audio.read())
+        audio_input, sr = librosa.load(audio_bytes, sr=16000)
+
+        # Get transcript
+        transcript = transcribe_into_English(audio_input)
+        transcript = clean_text(transcript).strip()
+        logging.info(f"Transcript: {transcript}")
+
+        return JSONResponse(content={"transcript": transcript})
+
+    except Exception as e:
+        logging.error(f"Error during transcription: {e}")
         raise HTTPException(status_code=500, detail="An error occurred during processing.")
 
 # if __name__ == '__main__':
