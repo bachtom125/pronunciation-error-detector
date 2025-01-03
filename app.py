@@ -19,6 +19,7 @@ import os
 import copy   
 from IPython.display import HTML, display
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
+from pydub import AudioSegment
 
 # Set the Numba cache directory to a writable location
 os.environ["NUMBA_CACHE_DIR"] = "/tmp"
@@ -50,14 +51,52 @@ whisper_model.to(device)
 # Section: Utils
 # =====================================
 
-def load_audio(audio_path, target_sr=16000):
-  """Load an audio file and resample it to 16kHz."""
-  audio, sr = librosa.load(audio_path, sr=target_sr)
-  return audio
+async def process_audio(audio, device, return_input_values=True):
+    """
+    Process an uploaded .m4a audio file and prepare input for the model.
+
+    Args:
+        audio: The uploaded audio file (e.g., from a web request).
+        device: The device (e.g., 'cuda' or 'cpu') to move tensors to.
+        return_input_values: Whether to return the processed input tensor.
+    
+    Returns:
+        audio_input: NumPy array of the audio samples.
+        input_values: Processed input tensor for the model.
+    """
+    # Read audio bytes
+    audio_bytes = BytesIO(await audio.read())
+
+    # Load the .m4a file using pydub
+    audio_segment = AudioSegment.from_file(audio_bytes, format="m4a")
+
+    # Convert the audio to a NumPy array
+    audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+
+    # Normalize the audio to [-1.0, 1.0]
+    max_val = np.iinfo(np.int16).max  # Maximum value for 16-bit PCM
+    audio_samples /= max_val
+
+    # If the audio has multiple channels, average them to mono
+    if audio_segment.channels > 1:
+        audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
+
+    # Resample the audio to 16kHz using librosa
+    audio_input = librosa.resample(audio_samples, orig_sr=audio_segment.frame_rate, target_sr=16000)
+    if not return_input_values:
+        return audio_input
+    
+    # Process the audio using the processor
+    input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
+
+    # Move the tensor to the specified device
+    input_values = input_values.to(device)
+    
+    return audio_input, input_values
 
 def transcribe_into_English(audio_input):
     # Load audio file
-    audio_input = whisper_processor(audio_input, sampling_rate=16000, return_tensors="pt").to(device)
+    audio_input = whisper_processor(audio_input, sampling_rate=16000, return_tensors="pt", language="en").to(device)
 
     # Perform transcription
     with torch.no_grad():
@@ -65,7 +104,7 @@ def transcribe_into_English(audio_input):
 
     # Decode the transcription
     transcription = whisper_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    return transcription.lower()
+    return transcription.lower().strip()
 
 def get_nested_position(nested_list, flat_index):
     """
@@ -762,7 +801,7 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
     logging.info("Received prediction request!")
 
     # Validate file extension
-    allowed_extensions = {"wav", "mp3"}
+    allowed_extensions = {"wav", "mp3", "m4a"}
     filename = audio.filename.lower()
 
     if not filename.endswith(tuple(allowed_extensions)):
@@ -773,12 +812,12 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
 
     # Load and preprocess the audio
     try:
-        audio_bytes = BytesIO(await audio.read())
-        audio_input, sr = librosa.load(audio_bytes, sr=16000)
-        input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
-        input_values = input_values.to(device)
+        audio_input, input_values = await process_audio(audio, device)
 
         # clean transcript
+        if transcript.lower().strip() == "//":
+            transcript = transcribe_into_English(audio_input)
+            print("HERE1")
         transcript = clean_text(transcript).strip()
         print(f"Transcript: {transcript}")
 
@@ -821,7 +860,7 @@ async def transcribe(audio: UploadFile):
     logging.info("Received transcription request!")
 
     # Validate file extension
-    allowed_extensions = {"wav", "mp3"}
+    allowed_extensions = {"wav", "mp3", "m4a"}
     filename = audio.filename.lower()
 
     if not filename.endswith(tuple(allowed_extensions)):
@@ -832,8 +871,7 @@ async def transcribe(audio: UploadFile):
 
     # Load and preprocess the audio
     try:
-        audio_bytes = BytesIO(await audio.read())
-        audio_input, sr = librosa.load(audio_bytes, sr=16000)
+        audio_input = await process_audio(audio, device, False)
 
         # Get transcript
         transcript = transcribe_into_English(audio_input)
