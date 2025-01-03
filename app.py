@@ -18,6 +18,7 @@ import eng_to_ipa as ipa_conv
 import os
 import copy   
 from IPython.display import HTML, display
+from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 
 # Set the Numba cache directory to a writable location
 os.environ["NUMBA_CACHE_DIR"] = "/tmp"
@@ -40,14 +41,31 @@ model.eval()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
 
+whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny")
+whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-tiny")
+whisper_model.eval()
+whisper_model.to(device)
+
+# =====================================
+# Section: Utils
+# =====================================
+
 def load_audio(audio_path, target_sr=16000):
   """Load an audio file and resample it to 16kHz."""
   audio, sr = librosa.load(audio_path, sr=target_sr)
   return audio
 
-# =====================================
-# Section: Utils
-# =====================================
+def transcribe_into_English(audio_input):
+    # Load audio file
+    audio_input = whisper_processor(audio_input, sampling_rate=16000, return_tensors="pt").to(device)
+
+    # Perform transcription
+    with torch.no_grad():
+        generated_ids = whisper_model.generate(audio_input.input_features)
+
+    # Decode the transcription
+    transcription = whisper_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return transcription.lower()
 
 def get_nested_position(nested_list, flat_index):
     """
@@ -121,6 +139,20 @@ def label_specific_elements_in_reference(reference, start_word_idx, start_elemen
         labeled_reference.append(labeled_sublist)
     
     return labeled_reference
+
+def clean_text(text: str) -> str:
+    """
+    Remove all characters from the input string except for letters (A-Z, a-z) and spaces.
+    
+    Parameters:
+        text (str): Input string to clean.
+        
+    Returns:
+        str: Cleaned string containing only letters and spaces.
+    """
+    # Use regex to keep only letters and spaces
+    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
+    return cleaned_text
 
 # =====================================
 # Section: IPA Phonemes Utils
@@ -236,6 +268,9 @@ class IPA:
             "ER0": "ɚ",    # unstressed (runner)
             "ER1": "ɝ",    # stressed (bird)
             "ER2": "ɝ",    # secondary stress (bird)
+
+            # unknown phoneme
+            "unk": "unk"
         }
 
         self.ipa_phonemes = list(self.ipa_to_orthography.keys())
@@ -258,9 +293,9 @@ class IPA:
                 arpa_phons = self.cmu_dict[word][0]
                 arap_phonemes.append(arpa_phons)  # Use the first phoneme representation
             else:
-                arap_phonemes.append('<UNK>')  # Append 'UNK' for unknown words
+                arap_phonemes.append(['unk'])  # Append 'UNK' for unknown words
         arap_phonemes = self.clean_arpabet_phonemes(arap_phonemes)
-        
+        print(arap_phonemes)
         ipa_phonemes = []
         for word in arap_phonemes:
             cur_phonemes = []
@@ -555,7 +590,8 @@ class IPA:
                 remaining_word = remaining_word[len(matched_spelling):]
 
         if remaining_word:
-            raise ValueError(f"Unmapped portion of the word remains: '{remaining_word}'")
+            result.append((('', 0), remaining_word))
+            print(f"Unmapped segment of the word remains: '{remaining_word}'")
 
         return result
     
@@ -623,7 +659,12 @@ class IPA:
                 remaining_word = remaining_word[len(matched_spelling):]
 
         if remaining_word:
-            raise ValueError(f"Unmapped portion of the word remains: '{remaining_word}'")
+            result["details"].append({
+                "phoneme": "",  # No phoneme
+                "word_segment": remaining_word,
+                "label": 0  # assume insertion
+            })
+            print(f"Unmapped segment of the word remains: '{remaining_word}'")
 
         return result
     
@@ -737,6 +778,10 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
         input_values = input_values.to(device)
 
+        # clean transcript
+        transcript = clean_text(transcript).strip()
+        print(f"Transcript: {transcript}")
+
         # Perform inference
         with torch.no_grad():
             logits = model(input_values).logits
@@ -759,6 +804,46 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
     
     except Exception as e:
         logging.error(f"Error during prediction: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred during processing.")
+
+# taking in audio only and returning the transcript
+@app.post("/transcribe")
+async def transcribe(audio: UploadFile):
+    """
+    Transcribe the uploaded audio and return the transcript.
+
+    Args:
+        audio (UploadFile): Uploaded audio file (WAV/MP3).
+
+    Returns:
+        JSONResponse: Contains the transcript.
+    """
+    logging.info("Received transcription request!")
+
+    # Validate file extension
+    allowed_extensions = {"wav", "mp3"}
+    filename = audio.filename.lower()
+
+    if not filename.endswith(tuple(allowed_extensions)):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only WAV and MP3 files are supported.",
+        )
+
+    # Load and preprocess the audio
+    try:
+        audio_bytes = BytesIO(await audio.read())
+        audio_input, sr = librosa.load(audio_bytes, sr=16000)
+
+        # Get transcript
+        transcript = transcribe_into_English(audio_input)
+        transcript = clean_text(transcript).strip()
+        logging.info(f"Transcript: {transcript}")
+
+        return JSONResponse(content={"transcript": transcript})
+
+    except Exception as e:
+        logging.error(f"Error during transcription: {e}")
         raise HTTPException(status_code=500, detail="An error occurred during processing.")
 
 # if __name__ == '__main__':
