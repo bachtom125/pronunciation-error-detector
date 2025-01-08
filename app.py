@@ -203,6 +203,9 @@ class IPA:
         # NOTE: removed all long signals ('ː') for compatibility with L2-artic's phoneme set (ssl model training set). American English. 
         # ground truth phonemes are converted into arpabet first, and then into ipa using the arpabet_to_ipa dict, meaning the arpabet_to_ipa dict contains
         # the core ipa phoeneme set
+
+        # NOTE: modifications to the list in https://www.dyslexia-reading-well.com/44-phonemes-in-english.html: 
+        # removed 'sc', 'ps', and 'st', in ipa_to_orthography of 's', because I want to assume it's silient 
         self.ipa_to_orthography = {
             'b': ['b', 'bb'],  # Examples: bug, bubble
             'd': ['d', 'dd', 'ed'],  # Examples: dad, add, milled
@@ -217,7 +220,7 @@ class IPA:
             'p': ['p', 'pp'],  # Examples: pin, dippy
             'r': ['r', 'rr', 'wr', 'rh'],  # Examples: run, carrot, wrench, rhyme
             'ɹ': ['r', 'rr', 'wr', 'rh'],  # Examples: run, carrot, wrench, rhyme
-            's': ['s', 'ss', 'c', 'sc', 'ps', 'st', 'ce', 'se'],  # Examples: sit, less, circle, scene, psycho, listen, pace, course
+            's': ['s', 'ss', 'c', 'ce', 'se'],  # Examples: sit, less, circle, scene, psycho, listen, pace, course
             't': ['t', 'tt', 'th', 'ed'],  # Examples: tip, matter, thomas, ripped
             'v': ['v', 'f', 'ph', 've'],  # Examples: vine, of, stephen, five
             'w': ['w', 'wh', 'u', 'o'],  # Examples: wit, why, quick, choir
@@ -242,7 +245,7 @@ class IPA:
             'u': ['o', 'oo', 'ew', 'ue', 'u_e', 'oe', 'ough', 'ui', 'oew', 'ou'],  # Examples: who, loon, dew, blue, flute, shoe, through, fruit, manoeuvre, group
             'ɔɪ': ['oi', 'oy', 'uoy'],  # Examples: join, boy, buoy
             'aʊ': ['ow', 'ou', 'ough'],  # Examples: now, shout, bough
-            'ə': ['o', 'a', 'er', 'i', 'ar', 'our', 'ur'],  # Examples: about, ladder, pencil, dollar, honour, augur
+            'ə': ['o', 'a', 'er', 'i', 'ar', 'our', 'ur', 'e'],  # Examples: about, ladder, pencil, dollar, honour, augur
             'eəʳ': ['air', 'are', 'ear', 'ere', 'eir', 'ayer'],  # Examples: chair, dare, pear, where, their, prayer
             'a': ['a'],  # Example: arm
             'ɜʳ': ['ir', 'er', 'ur', 'ear', 'or', 'our', 'yr'],  # Examples: bird, term, burn, pearl, word, journey, myrtle
@@ -464,24 +467,38 @@ class IPA:
     
     def split_phoneme_sequence(self, sequence: str):
         """
-        Splits a phoneme sequence (of one word) into individual phonemes based on the IPA dictionary keys.
+        Splits a phoneme sequence (of a string of phoneme with each word separated by a space) into individual phonemes based on the IPA dictionary keys.
+        Parameters:
+            sequence (str): A string of phonemes (e.g. "ˈɪŋɡlɪʃ")
+        Returns:
+            list: List of list of phonemes, one nested list for each word.
         """
-        phonemes = []
         i = 0
         keys = sorted(self.ipa_phonemes, key=len, reverse=True)  # Prioritize longer matches
         
+        sequence_phonemes = []
+        word_phonemes = []
         while i < len(sequence):
+            # if reaches the end of a word
+            if sequence[i] == ' ':
+                if word_phonemes:
+                    sequence_phonemes.append(word_phonemes)
+                    word_phonemes = []
+                i += 1
+                continue
             match = None
+
+            # otherwise
             for key in keys:
                 if sequence[i:i+len(key)] == key:
                     match = key
-                    phonemes.append(match)
+                    word_phonemes.append(match)
                     i += len(key)
                     break
             if not match:  # No phoneme matched
-                phonemes.append('unk')
+                word_phonemes.append('unk')
                 i += 1
-        return phonemes
+        return sequence_phonemes
     
     def evaluate_pronunciation(self, reference: list, pronunciation: list):
         """
@@ -785,6 +802,8 @@ class IPA:
 def home():
     return "Healthy bro!"
 
+import time # temp
+
 # taking in both audio and transcript from the user
 @app.post("/predict")
 async def predict(audio: UploadFile, transcript: str = Form(...)):
@@ -803,6 +822,7 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
     # Validate file extension
     allowed_extensions = {"wav", "mp3", "m4a"}
     filename = audio.filename.lower()
+    start_time = time.time()
 
     if not filename.endswith(tuple(allowed_extensions)):
         raise HTTPException(
@@ -813,13 +833,17 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
     # Load and preprocess the audio
     try:
         audio_input, input_values = await process_audio(audio, device)
-
+        
+        end_time = time.time()
+        print(f"Time from call to finish processing audio: {end_time - start_time} seconds")
+        
         # clean transcript
         if transcript.lower().strip() == "//":
             transcript = transcribe_into_English(audio_input)
             print("HERE1")
         transcript = clean_text(transcript).strip()
-        print(f"Transcript: {transcript}")
+        another_end_time = time.time()
+        logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
 
         # Perform inference
         with torch.no_grad():
@@ -831,11 +855,11 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         ground_truth_phonemes_split = IPA().convert_words_into_phonemes(transcript.split())
        
         uttered_phonemes = IPA().clean_phonemes(uttered_phonemes)
-        uttered_phonemes_split = [IPA().split_phoneme_sequence(word) for word in uttered_phonemes.split()]
-        
+        uttered_phonemes_split = IPA().split_phoneme_sequence(uttered_phonemes)
+        yet_another_end_time = time.time() 
+        print(f"Time from transcript to finish generating labels: {yet_another_end_time - another_end_time} seconds")
         print("Uttered:", uttered_phonemes_split)
         print("Ground :", ground_truth_phonemes_split)
-        print(transcript)
 
         labels = IPA().generate_segment_labels_from_lists_for_api(ground_truth_phonemes_split, uttered_phonemes_split, transcript)
 
@@ -862,7 +886,7 @@ async def transcribe(audio: UploadFile):
     # Validate file extension
     allowed_extensions = {"wav", "mp3", "m4a"}
     filename = audio.filename.lower()
-
+    start_time = time.time()
     if not filename.endswith(tuple(allowed_extensions)):
         raise HTTPException(
             status_code=400,
@@ -874,9 +898,12 @@ async def transcribe(audio: UploadFile):
         audio_input = await process_audio(audio, device, False)
 
         # Get transcript
+        end_time = time.time()
+        print(f"Time from call to finish processing audio: {end_time - start_time} seconds")
         transcript = transcribe_into_English(audio_input)
         transcript = clean_text(transcript).strip()
-        logging.info(f"Transcript: {transcript}")
+        another_end_time = time.time()
+        logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
 
         return JSONResponse(content={"transcript": transcript})
 
