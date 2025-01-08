@@ -281,7 +281,7 @@ class IPA:
             "F": "f",     # fee
             "G": "g",     # green
             "HH": "h",    # he
-            "IH": "ɪ",    # it
+            "IH": "ɪ",    #     
             "IY": "i",    # eat
             "JH": "dʒ",   # gee
             "K": "k",     # key
@@ -651,7 +651,7 @@ class IPA:
                 remaining_word = remaining_word[len(matched_spelling):]
 
         if remaining_word:
-            result.append((('', 0), remaining_word))
+            result.append((('', 1), remaining_word))
             print(f"Unmapped segment of the word remains: '{remaining_word}'")
 
         return result
@@ -719,11 +719,11 @@ class IPA:
             if matched_spelling:
                 remaining_word = remaining_word[len(matched_spelling):]
 
-        if remaining_word:
+        if remaining_word: # WORKING: if possible_spellings are not exhaustive, will consider the rest a silient grapheme
             result["details"].append({
                 "phoneme": "",  # No phoneme
                 "word_segment": remaining_word,
-                "label": 0  # assume insertion
+                "label": 1  
             })
             print(f"Unmapped segment of the word remains: '{remaining_word}'")
 
