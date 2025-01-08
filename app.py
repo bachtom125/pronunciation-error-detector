@@ -281,7 +281,7 @@ class IPA:
             "F": "f",     # fee
             "G": "g",     # green
             "HH": "h",    # he
-            "IH": "ɪ",    #     
+            "IH": "ɪ",    # it
             "IY": "i",    # eat
             "JH": "dʒ",   # gee
             "K": "k",     # key
@@ -305,16 +305,89 @@ class IPA:
             "Z": "z",     # zee
             "ZH": "ʒ",     # seizure
 
-            # nuances where stress affect the resulting corresponding ipa phoneme
+            # Vowels with stress affecting IPA
             "AH0": "ə",    # unstressed (about)
             "AH1": "ʌ",    # stressed (hut)
             "AH2": "ʌ",    # secondary stress (hut)
             "ER0": "ɚ",    # unstressed (runner)
             "ER1": "ɝ",    # stressed (bird)
             "ER2": "ɝ",    # secondary stress (bird)
+            "EY0": "e",    # unstressed (obey)
+            "EY1": "eɪ",   # stressed (day)
+            "EY2": "eɪ",   # secondary stress (day)
+            "IH0": "ɨ",    # unstressed (possible centralization)
+            "IH1": "ɪ",    # stressed (bit)
+            "IH2": "ɪ",    # secondary stress (bit)
+            "UW0": "ʉ",    # unstressed (possible centralization)
+            "UW1": "u",    # stressed (food)
+            "UW2": "u",    # secondary stress (food)
+            "AO0": "ə",    # unstressed (centralized in some accents)
+            "AO1": "ɔ",    # stressed (thought)
+            "AO2": "ɔ",    # secondary stress (thought)
+            "AE0": "ə",    # unstressed (centralized in some accents)
+            "AE1": "æ",    # stressed (cat)
+            "AE2": "æ",    # secondary stress (cat)
+            "OW0": "o",    # unstressed (less diphthongized)
+            "OW1": "oʊ",   # stressed (go)
+            "OW2": "oʊ",   # secondary stress (go)
+            "UH0": "ɨ",    # unstressed (centralized or reduced)
+            "UH1": "ʊ",    # stressed (put)
+            "UH2": "ʊ",    # secondary stress (put)
 
             # unknown phoneme
             "unk": "unk"
+        }
+
+        # whether the two phonemes are considered correct (value = 1), acceptable (value = 2), or wrong (value = 0)
+        self.phoneme_pair_label = {
+            # Completely correct pairs (self-similarity)
+            **{(p, p): 1 for p in [
+                'b', 'd', 'f', 'g', 'h', 'dʒ', 'k', 'l', 'm', 'n', 'p', 'r', 'ɹ', 's', 't', 'v', 'w', 'z', 'ʒ', 'tʃ',
+                'ʃ', 'θ', 'ð', 'ŋ', 'j', 'æ', 'eɪ', 'ɛ', 'i', 'ɪ', 'aɪ', 'ɒ', 'oʊ', 'ʊ', 'ʌ', 'u', 'ɔɪ', 'aʊ', 'ə',
+                'eəʳ', 'a', 'ɜʳ', 'ɔ', 'ɪəʳ', 'ʊəʳ', 'ɚ', 'ɝ', 'ʍ', 'ɑ'
+            ]},
+
+            # Acceptable substitutions (value = 2)
+            **{pair: 2 for pair in [
+                ('b', 'p'), ('d', 't'), ('g', 'k'), ('v', 'f'), ('z', 's'), ('ʒ', 'ʃ'), ('ð', 'θ'),
+                ('m', 'n'), ('m', 'ŋ'), ('n', 'ŋ'), ('r', 'ɹ'), ('l', 'r'), ('l', 'ɹ'), ('w', 'ʍ'),
+                ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
+                ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
+                ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+            ] + [(b, a) for (a, b) in [
+                ('b', 'p'), ('d', 't'), ('g', 'k'), ('v', 'f'), ('z', 's'), ('ʒ', 'ʃ'), ('ð', 'θ'),
+                ('m', 'n'), ('m', 'ŋ'), ('n', 'ŋ'), ('r', 'ɹ'), ('l', 'r'), ('l', 'ɹ'), ('w', 'ʍ'),
+                ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
+                ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
+                ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+            ] if (b, a) not in [(a, b)]]},
+
+            # Completely wrong pairs (default value = 0)
+            **{(p1, p2): 0 for p1 in [
+                'b', 'd', 'f', 'g', 'h', 'dʒ', 'k', 'l', 'm', 'n', 'p', 'r', 'ɹ', 's', 't', 'v', 'w', 'z', 'ʒ', 'tʃ',
+                'ʃ', 'θ', 'ð', 'ŋ', 'j', 'æ', 'eɪ', 'ɛ', 'i', 'ɪ', 'aɪ', 'ɒ', 'oʊ', 'ʊ', 'ʌ', 'u', 'ɔɪ', 'aʊ', 'ə',
+                'eəʳ', 'a', 'ɜʳ', 'ɔ', 'ɪəʳ', 'ʊəʳ', 'ɚ', 'ɝ', 'ʍ', 'ɑ'
+            ] for p2 in [
+                'b', 'd', 'f', 'g', 'h', 'dʒ', 'k', 'l', 'm', 'n', 'p', 'r', 'ɹ', 's', 't', 'v', 'w', 'z', 'ʒ', 'tʃ',
+                'ʃ', 'θ', 'ð', 'ŋ', 'j', 'æ', 'eɪ', 'ɛ', 'i', 'ɪ', 'aɪ', 'ɒ', 'oʊ', 'ʊ', 'ʌ', 'u', 'ɔɪ', 'aʊ', 'ə',
+                'eəʳ', 'a', 'ɜʳ', 'ɔ', 'ɪəʳ', 'ʊəʳ', 'ɚ', 'ɝ', 'ʍ', 'ɑ'
+            ] if p1 != p2 and (p1, p2) not in [
+                ('b', 'p'), ('d', 't'), ('g', 'k'), ('v', 'f'), ('z', 's'), ('ʒ', 'ʃ'), ('ð', 'θ'),
+                ('m', 'n'), ('m', 'ŋ'), ('n', 'ŋ'), ('r', 'ɹ'), ('l', 'r'), ('l', 'ɹ'), ('w', 'ʍ'),
+                ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
+                ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
+                ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+            ] + [(b, a) for (a, b) in [
+                ('b', 'p'), ('d', 't'), ('g', 'k'), ('v', 'f'), ('z', 's'), ('ʒ', 'ʃ'), ('ð', 'θ'),
+                ('m', 'n'), ('m', 'ŋ'), ('n', 'ŋ'), ('r', 'ɹ'), ('l', 'r'), ('l', 'ɹ'), ('w', 'ʍ'),
+                ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
+                ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
+                ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+            ] if (b, a) not in [(a, b)]]}
         }
 
         self.ipa_phonemes = list(self.ipa_to_orthography.keys())
@@ -545,11 +618,28 @@ class IPA:
                 # Substitutions: Check phoneme-by-phoneme
                 ref_segment = smushed_ref[i1:i2]
                 pron_segment = smushed_pron[j1:j2]
+                # go through each pair of phoneme in ref and pron segment, if they are labeled 2 or 1 in the phoneme_pair_label, remove them as mistakes
+                original_i1 = i1
+                original_i2 = i2
+                for ref_phoneme, pron_phoneme in zip(ref_segment, pron_segment):
+                    if self.phoneme_pair_label[(ref_phoneme, pron_phoneme)] in [1, 2]:
+                        processed_indices.add(i1)
+                        i1 += 1  # Move to the next index in the reference
+                        j1 += 1  # Move to the next index in the pronunciation
                 
+                if i1 > original_i1:
+                    start_word_idx, start_element_idx = get_nested_position(reference, original_i1)
+                    end_word_idx, end_element_idx = get_nested_position(reference, i1 - 1)
+                    labels = label_specific_elements_in_reference(labels, start_word_idx, start_element_idx, end_word_idx, end_element_idx, 1)
+                
+                if i1 >= original_i2: # if no more phoneme in reference left to process
+                    continue
+
                 start_word_idx, start_element_idx = get_nested_position(reference, i1)
                 end_word_idx, end_element_idx = get_nested_position(reference, i2 - 1)
 
                 labels = label_specific_elements_in_reference(labels, start_word_idx, start_element_idx, end_word_idx, end_element_idx, 0)
+                processed_indices.update(range(i1, i2))        
 
                 for ref_phoneme, pron_phoneme in zip(ref_segment, pron_segment):
                     if ref_phoneme != pron_phoneme:
@@ -750,7 +840,7 @@ class IPA:
             phoneme_segment_map = self.map_phonemes_to_segments(word_phon_labels, word)
             combined_labels.append(phoneme_segment_map)
             
-        return combined_labels
+        return errors, combined_labels
     
     def generate_segment_labels_from_lists_for_api(self, ground_truth_phonemes, uttered_phonemes, transcript):
         # same as generate_segment_labels above, but takes lists (aleady segmented ipa phonemes) as input 
@@ -762,6 +852,16 @@ class IPA:
             
         return combined_labels
     
+    def handle_label_shenanigans(self, labels):
+        """
+        Handle label shenanigans manually.
+        - if θ is the last phoneme in a word, and it's labelled 0, change it to 1
+        """
+        for word in labels:
+            if word[-1][0] == "θ" and word[-1][1] == 0:
+                word[-1] = ("θ", 1)
+        return labels
+        
     def display_ipa_phonemes_with_labels_and_segments(self, data, words):
         """
         Display phonemes and their corresponding segments with labels.
@@ -801,7 +901,7 @@ class IPA:
 
         # Display
         display(HTML(html_content))
-
+        
 # health check
 @app.get("/")
 def home():
