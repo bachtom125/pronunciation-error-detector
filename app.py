@@ -500,6 +500,9 @@ class IPA:
             if not match:  # No phoneme matched
                 word_phonemes.append('unk')
                 i += 1
+
+        if word_phonemes:
+            sequence_phonemes.append(word_phonemes)
         return sequence_phonemes
     
     def evaluate_pronunciation(self, reference: list, pronunciation: list):
