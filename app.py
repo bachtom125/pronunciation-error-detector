@@ -334,7 +334,7 @@ class IPA:
         arap_phonemes = []
         for word in words:
             if word in self.cmu_dict:
-                arpa_phons = self.cmu_dict[word][0]
+                arpa_phons = self.cmu_dict[word][-1]
                 arap_phonemes.append(arpa_phons)  # Use the first phoneme representation
             else:
                 arap_phonemes.append(['unk'])  # Append 'UNK' for unknown words
