@@ -181,17 +181,19 @@ def label_specific_elements_in_reference(reference, start_word_idx, start_elemen
 
 def clean_text(text: str) -> str:
     """
-    Remove all characters from the input string except for letters (A-Z, a-z) and spaces.
-    
+    Remove punctuation from the input string except for special characters 
+    that are part of a word, such as ' in I'm or - in hard-working.
+
     Parameters:
         text (str): Input string to clean.
         
     Returns:
-        str: Cleaned string containing only letters and spaces.
+        str: Cleaned string with allowed special characters retained.
     """
-    # Use regex to keep only letters and spaces
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    return cleaned_text
+    # Allow letters, spaces, apostrophes, and hyphens within words
+    cleaned_text = re.sub(r'[^\w\s\'-]', '', text)  # Remove punctuation except ' and -
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text)  # Normalize spaces
+    return cleaned_text.lower().strip()
 
 # =====================================
 # Section: IPA Phonemes Utils
