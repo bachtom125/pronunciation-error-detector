@@ -181,17 +181,19 @@ def label_specific_elements_in_reference(reference, start_word_idx, start_elemen
 
 def clean_text(text: str) -> str:
     """
-    Remove all characters from the input string except for letters (A-Z, a-z) and spaces.
-    
+    Remove punctuation from the input string except for special characters 
+    that are part of a word, such as ' in I'm or - in hard-working.
+
     Parameters:
         text (str): Input string to clean.
         
     Returns:
-        str: Cleaned string containing only letters and spaces.
+        str: Cleaned string with allowed special characters retained.
     """
-    # Use regex to keep only letters and spaces
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    return cleaned_text
+    # Allow letters, spaces, apostrophes, and hyphens within words
+    cleaned_text = re.sub(r'[^\w\s\'-]', '', text)  # Remove punctuation except ' and -
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text)  # Normalize spaces
+    return cleaned_text.lower().strip()
 
 # =====================================
 # Section: IPA Phonemes Utils
@@ -279,7 +281,7 @@ class IPA:
             "F": "f",     # fee
             "G": "g",     # green
             "HH": "h",    # he
-            "IH": "ɪ",    # it
+            "IH": "ɪ",    #     
             "IY": "i",    # eat
             "JH": "dʒ",   # gee
             "K": "k",     # key
@@ -498,6 +500,9 @@ class IPA:
             if not match:  # No phoneme matched
                 word_phonemes.append('unk')
                 i += 1
+
+        if word_phonemes:
+            sequence_phonemes.append(word_phonemes)
         return sequence_phonemes
     
     def evaluate_pronunciation(self, reference: list, pronunciation: list):
@@ -646,7 +651,7 @@ class IPA:
                 remaining_word = remaining_word[len(matched_spelling):]
 
         if remaining_word:
-            result.append((('', 0), remaining_word))
+            result.append((('', 1), remaining_word))
             print(f"Unmapped segment of the word remains: '{remaining_word}'")
 
         return result
@@ -714,11 +719,11 @@ class IPA:
             if matched_spelling:
                 remaining_word = remaining_word[len(matched_spelling):]
 
-        if remaining_word:
+        if remaining_word: # WORKING: if possible_spellings are not exhaustive, will consider the rest a silient grapheme
             result["details"].append({
                 "phoneme": "",  # No phoneme
                 "word_segment": remaining_word,
-                "label": 0  # assume insertion
+                "label": 1  
             })
             print(f"Unmapped segment of the word remains: '{remaining_word}'")
 
