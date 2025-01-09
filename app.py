@@ -42,8 +42,8 @@ model.eval()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
 
-whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny")
-whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-tiny")
+whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny.en")
+whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-tiny.en")
 whisper_model.eval()
 whisper_model.to(device)
 
@@ -622,10 +622,11 @@ class IPA:
                 original_i1 = i1
                 original_i2 = i2
                 for ref_phoneme, pron_phoneme in zip(ref_segment, pron_segment):
-                    if self.phoneme_pair_label[(ref_phoneme, pron_phoneme)] in [1, 2]:
-                        processed_indices.add(i1)
-                        i1 += 1  # Move to the next index in the reference
-                        j1 += 1  # Move to the next index in the pronunciation
+                    if (ref_phoneme, pron_phoneme) in self.phoneme_pair_label:
+                        if self.phoneme_pair_label[(ref_phoneme, pron_phoneme)] in [1, 2]:
+                            processed_indices.add(i1)
+                            i1 += 1  # Move to the next index in the reference
+                            j1 += 1  # Move to the next index in the pronunciation
                 
                 if i1 > original_i1:
                     start_word_idx, start_element_idx = get_nested_position(reference, original_i1)
@@ -840,7 +841,7 @@ class IPA:
             phoneme_segment_map = self.map_phonemes_to_segments(word_phon_labels, word)
             combined_labels.append(phoneme_segment_map)
             
-        return errors, combined_labels
+        return combined_labels
     
     def generate_segment_labels_from_lists_for_api(self, ground_truth_phonemes, uttered_phonemes, transcript):
         # same as generate_segment_labels above, but takes lists (aleady segmented ipa phonemes) as input 
