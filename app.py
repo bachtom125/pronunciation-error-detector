@@ -42,8 +42,8 @@ model.eval()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
 
-whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny")
-whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-tiny")
+whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny.en")
+whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-tiny.en")
 whisper_model.eval()
 whisper_model.to(device)
 
