@@ -20,6 +20,7 @@ import copy
 from IPython.display import HTML, display
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 from pydub import AudioSegment
+import onnxruntime as ort
 
 # Set the Numba cache directory to a writable location
 os.environ["NUMBA_CACHE_DIR"] = "/tmp"
@@ -35,12 +36,15 @@ app = FastAPI()
 # Load the processor and model
 MODEL_NAME = "mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme" # wav2vec based phoneme trascriber trained on L2-ARTIC
 processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
-model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
-model.eval()
+# model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
+# model.eval()
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu" # temp
+# model.to(device)
 
-# Check device availability
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model.to(device)
+# TESTING: use onnx instead of normal model to see if it's faster
+# Load the optimized ONNX model
+model = ort.InferenceSession("wav2vec2_model.onnx", providers=["CPUExecutionProvider"]) 
 
 whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny.en")
 whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-tiny.en")
@@ -946,18 +950,28 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         # clean transcript
         if transcript.lower().strip() == "//":
             transcript = transcribe_into_English(audio_input)
-            print("HERE1")
+            print("Transcript missing, transcribing audio...")
         transcript = clean_text(transcript).strip()
         another_end_time = time.time()
         logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
 
         # Perform inference
-        with torch.no_grad():
-            logits = model(input_values).logits
+        # with torch.no_grad():
+        #     logits = model(input_values).logits
 
-        # Decode the phonemes
-        predicted_ids = torch.argmax(logits, dim=-1)
+        #   # Decode the phonemes
+        # predicted_ids = torch.argmax(logits, dim=-1)
+        # uttered_phonemes = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+
+        # TESTING: Perfrom inference with new ONNX model
+        # Run inference
+        input_values = input_values.cpu()
+        inputs = {"input_values": input_values.numpy()}
+        logits = model.run(["logits"], inputs)
+
+        predicted_ids = torch.argmax(torch.tensor(logits[0]), dim=-1)
         uttered_phonemes = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0] 
+
         ground_truth_phonemes_split = IPA().convert_words_into_phonemes(transcript.split())
        
         uttered_phonemes = IPA().clean_phonemes(uttered_phonemes)
