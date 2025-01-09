@@ -35,8 +35,14 @@ app = FastAPI()
 # Load the processor and model
 MODEL_NAME = "mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme" # wav2vec based phoneme trascriber trained on L2-ARTIC
 processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
-model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
-model.eval()
+plain_model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
+plain_model.eval()
+
+model = torch.quantization.quantize_dynamic(
+    plain_model,  # Model to be quantized
+    {torch.nn.Linear},  # Layers to quantize (e.g., Linear layers)
+    dtype=torch.qint8  # Data type for quantized weights
+)
 
 # Check device availability
 device = "cuda" if torch.cuda.is_available() else "cpu"
