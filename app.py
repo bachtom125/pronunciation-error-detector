@@ -206,11 +206,21 @@ def clean_text(text: str) -> str:
 import re
 from difflib import SequenceMatcher
 from IPython.display import HTML, display
-import cmudict
 import copy   
 from IPython.display import HTML, display
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
+
+# WORKING: converting functions to class, currently done with the last function in the class
+import re
+from difflib import SequenceMatcher
+from IPython.display import HTML, display
+import copy   
+from IPython.display import HTML, display
+from Bio import pairwise2
+from Bio.pairwise2 import format_alignment
+import cmudict
+cmu_dict = cmudict.dict()
 
 class PronunciationAssessment:
     def __init__(self, transcript, uttered_phonemes):
@@ -408,7 +418,6 @@ class PronunciationAssessment:
 
         self.ipa_phonemes = list(self.ipa_to_orthography.keys())
         self.ipa_phonemes.append('unk')
-        self.cmu_dict = cmudict.dict()
 
         # instance-specific variables
         self.transcript = transcript.lower().strip()
@@ -440,11 +449,11 @@ class PronunciationAssessment:
         
         arap_phonemes = []
         for word in self.transcript.split():
-            if len(self.cmu_dict[word]) != 0:
+            if len(cmu_dict[word]) != 0:
                 if not get_all_versions:
-                    arpa_phons = self.clean_single_arpabet_phoneme_list(self.cmu_dict[word][0])
+                    arpa_phons = self.clean_single_arpabet_phoneme_list(cmu_dict[word][0])
                 else:
-                    phon_vers = self.cmu_dict[word]
+                    phon_vers = cmu_dict[word]
                     arpa_phons = [self.clean_single_arpabet_phoneme_list(phons) for phons in phon_vers]
                 arap_phonemes.append(arpa_phons)  # Use the first phoneme representation
             else:
@@ -802,7 +811,6 @@ class PronunciationAssessment:
         if current_segment:
             segments.append(current_segment)
 
-        print(segments)
         # Output the segmented uttered list
         self.segmented_uttered_ipa_phonemes = segments
         
