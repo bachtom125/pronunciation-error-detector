@@ -20,6 +20,8 @@ import copy
 from IPython.display import HTML, display
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 from pydub import AudioSegment
+from Bio import pairwise2
+from Bio.pairwise2 import format_alignment
 
 # Set the Numba cache directory to a writable location
 os.environ["NUMBA_CACHE_DIR"] = "/tmp"
@@ -35,14 +37,8 @@ app = FastAPI()
 # Load the processor and model
 MODEL_NAME = "mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme" # wav2vec based phoneme trascriber trained on L2-ARTIC
 processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
-plain_model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
-plain_model.eval()
-
-model = torch.quantization.quantize_dynamic(
-    plain_model,  # Model to be quantized
-    {torch.nn.Linear},  # Layers to quantize (e.g., Linear layers)
-    dtype=torch.qint8  # Data type for quantized weights
-)
+model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
+model.eval()
 
 # Check device availability
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -206,8 +202,28 @@ def clean_text(text: str) -> str:
 # =====================================
 
 
-class IPA:
-    def __init__(self):
+# WORKING: converting functions to class, currently done with the last function in the class
+import re
+from difflib import SequenceMatcher
+from IPython.display import HTML, display
+import copy   
+from IPython.display import HTML, display
+from Bio import pairwise2
+from Bio.pairwise2 import format_alignment
+
+# WORKING: converting functions to class, currently done with the last function in the class
+import re
+from difflib import SequenceMatcher
+from IPython.display import HTML, display
+import copy   
+from IPython.display import HTML, display
+from Bio import pairwise2
+from Bio.pairwise2 import format_alignment
+import cmudict
+cmu_dict = cmudict.dict()
+
+class PronunciationAssessment:
+    def __init__(self, transcript, uttered_phonemes):
         # NOTE: removed all long signals ('ː') for compatibility with L2-artic's phoneme set (ssl model training set). American English. 
         # ground truth phonemes are converted into arpabet first, and then into ipa using the arpabet_to_ipa dict, meaning the arpabet_to_ipa dict contains
         # the core ipa phoeneme set
@@ -360,14 +376,16 @@ class IPA:
                 ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
                 ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
                 ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
-                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ'),
+                ('ð', 'd'), ('ɑ', 'a')
             ] + [(b, a) for (a, b) in [
                 ('b', 'p'), ('d', 't'), ('g', 'k'), ('v', 'f'), ('z', 's'), ('ʒ', 'ʃ'), ('ð', 'θ'),
                 ('m', 'n'), ('m', 'ŋ'), ('n', 'ŋ'), ('r', 'ɹ'), ('l', 'r'), ('l', 'ɹ'), ('w', 'ʍ'),
                 ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
                 ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
                 ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
-                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ'),
+                ('ð', 'd'), ('ɑ', 'a')
             ] if (b, a) not in [(a, b)]]},
 
             # Completely wrong pairs (default value = 0)
@@ -385,20 +403,31 @@ class IPA:
                 ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
                 ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
                 ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
-                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ'),
+                ('ð', 'd'), ('ɑ', 'a')
             ] + [(b, a) for (a, b) in [
                 ('b', 'p'), ('d', 't'), ('g', 'k'), ('v', 'f'), ('z', 's'), ('ʒ', 'ʃ'), ('ð', 'θ'),
                 ('m', 'n'), ('m', 'ŋ'), ('n', 'ŋ'), ('r', 'ɹ'), ('l', 'r'), ('l', 'ɹ'), ('w', 'ʍ'),
                 ('j', 'ɹ'), ('f', 'θ'), ('v', 'ð'), ('s', 'ʃ'), ('z', 'ʒ'), ('tʃ', 'dʒ'), ('tʃ', 'ʃ'),
                 ('dʒ', 'ʒ'), ('i', 'ɪ'), ('ɪ', 'ɛ'), ('ɛ', 'æ'), ('ə', 'ʌ'), ('ə', 'ɜʳ'), ('ʌ', 'ɜʳ'),
                 ('ə', 'ɚ'), ('u', 'ʊ'), ('ʊ', 'oʊ'), ('oʊ', 'ɔ'), ('ɔ', 'ɒ'), ('ɑ', 'ɒ'), ('eɪ', 'ɛ'),
-                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ')
+                ('eɪ', 'æ'), ('aɪ', 'ɪ'), ('aʊ', 'ʊ'), ('ɔɪ', 'ɔ'), ('ɝ', 'ɚ'), ('ɪəʳ', 'ɜʳ'), ('ʊəʳ', 'ɔ'),
+                ('ð', 'd'), ('ɑ', 'a')
             ] if (b, a) not in [(a, b)]]}
         }
 
         self.ipa_phonemes = list(self.ipa_to_orthography.keys())
         self.ipa_phonemes.append('unk')
-        self.cmu_dict = cmudict.dict()
+
+        # instance-specific variables
+        self.transcript = transcript.lower().strip()
+        self.uttered_ipa_phonemes = uttered_phonemes
+        self.ground_truth_arpabet_phonemes = ""
+        self.ground_truth_ipa_phonemes = ""
+
+        self.segmented_uttered_ipa_phonemes = []
+        self.segmented_ground_truth_arpabet_phonemes = []
+        self.segmented_ground_truth_ipa_phonemes = []
 
     def get_phoneme_count(self):
         return len(self.ipa_phonemes)
@@ -406,27 +435,51 @@ class IPA:
     def has_phoneme(self, phoneme): 
         return phoneme in self.ipa_phonemes
 
-    def convert_words_into_phonemes(self, words):
+    def convert_transcript_into_phonemes(self, get_all_versions=True):
         """
+        Parameters:
+            get_all_versions (bool): Default to True. Whether to return all possible phoneme versions for each word.
         Convert a list of word into IPA phonems through ARPABET phonemes.
+
+        Returns:    
+            bool: If the conversion is successful.
         """
+        if len(self.transcript) == 0:   
+            return False
+        
         arap_phonemes = []
-        for word in words:
-            if word in self.cmu_dict:
-                arpa_phons = self.cmu_dict[word][0]
+        for word in self.transcript.split():
+            if len(cmu_dict[word]) != 0:
+                if not get_all_versions:
+                    arpa_phons = self.clean_single_arpabet_phoneme_list(cmu_dict[word][0])
+                else:
+                    phon_vers = cmu_dict[word]
+                    arpa_phons = [self.clean_single_arpabet_phoneme_list(phons) for phons in phon_vers]
                 arap_phonemes.append(arpa_phons)  # Use the first phoneme representation
             else:
-                arap_phonemes.append(['unk'])  # Append 'UNK' for unknown words
-        arap_phonemes = self.clean_arpabet_phonemes(arap_phonemes)
-        print(arap_phonemes)
-        ipa_phonemes = []
-        for word in arap_phonemes:
-            cur_phonemes = []
-            for phon in word:
-                cur_phonemes.append(self.arpabet_to_ipa[phon])
-            ipa_phonemes.append(cur_phonemes)
-            
-        return ipa_phonemes
+                arap_phonemes.append([['unk']])  # Append 'UNK' for unknown words\
+
+        self.segmented_ground_truth_arpabet_phonemes = arap_phonemes
+        if not get_all_versions:
+            ipa_phonemes = []
+            for word in arap_phonemes:
+                cur_phonemes = []
+                for phon in word:
+                    cur_phonemes.append(self.arpabet_to_ipa[phon])
+                ipa_phonemes.append(cur_phonemes)
+        else: 
+            ipa_phonemes = []
+            for word in arap_phonemes:
+                cur_word = []
+                for ver in word:
+                    cur_ver = []
+                    for phon in ver:
+                        cur_ver.append(self.arpabet_to_ipa[phon])
+                    cur_word.append(cur_ver)
+                ipa_phonemes.append(cur_word)
+
+        self.segmented_ground_truth_ipa_phonemes = ipa_phonemes
+        return True
         
     def remove_ipa_stress_markers(self, phonemes):
         """
@@ -501,11 +554,11 @@ class IPA:
             new_ipa_phonemes += cur_word
         return new_ipa_phonemes
     
-    def clean_phonemes(self, phonemes):
+    def clean_ipa_phonemes(self):
         """
-        Parameters:
-            phonemes (str): A string of phonemes (e.g. "ˈɪŋɡlɪʃ")
+        Clean uttered phonemes by removing stress, length, break, tone, global, and diacritic markers, as well as tie bars.
         """
+        phonemes = self.uttered_ipa_phonemes
         phonemes = self.remove_ipa_stress_markers(phonemes)
         phonemes = self.remove_ipa_length_markers(phonemes)
         phonemes = self.remove_ipa_break_markers(phonemes)
@@ -514,7 +567,9 @@ class IPA:
         phonemes = self.remove_ipa_diacritics(phonemes)
         phonemes = self.remove_tie_bars(phonemes)
         phonemes = self.correct_shenanigans(phonemes)
-        return phonemes
+        self.uttered_ipa_phonemes = phonemes
+        
+        return True
     
     def remove_stress_indicator_from_arpabet_phonemes(self, arpabet_phoneme_list):
         """
@@ -528,16 +583,35 @@ class IPA:
         """
         cleaned_phon_list = []
         for word_phonemes in arpabet_phoneme_list:
-            cleaned_word = []
+            cleaned_phon_list = []
             for phoneme in word_phonemes:
                 if not phoneme.startswith(('AH', 'ER')):
-                    cleaned_word.append(re.sub(r'\d', '', phoneme))
+                    cleaned_phon_list.append(re.sub(r'\d', '', phoneme))
                 else:
-                    cleaned_word.append(phoneme)
-            cleaned_phon_list.append(cleaned_word)
+                    cleaned_phon_list.append(phoneme)
+            cleaned_phon_list.append(cleaned_phon_list)
 
         return cleaned_phon_list
     
+    def remove_stress_indicator_from_single_arpabet_phoneme_list(self, phon_list):
+        """
+        Remove all stress markers (trailing numbers), excluding AH and ER (due to their nuances, refer to the arpa_to_ipa dict for detail)
+
+        Parameters:
+        phon_list (list(str)): The list of arpabet phoneme
+
+        Returns:
+            str: Updated phoneme with numbers removed.
+        """
+        cleaned_phon_list = []
+        for phoneme in phon_list:
+            if not phoneme.startswith(('AH', 'ER')):
+                cleaned_phon_list.append(re.sub(r'\d', '', phoneme))
+            else:
+                cleaned_phon_list.append(phoneme)
+
+        return cleaned_phon_list
+            
     def clean_arpabet_phonemes(self, arpabet_phoneme_list):
         """
         Parameters:
@@ -546,14 +620,19 @@ class IPA:
         cleaned_phonemes = self.remove_stress_indicator_from_arpabet_phonemes(arpabet_phoneme_list)
         return cleaned_phonemes
     
-    def split_phoneme_sequence(self, sequence: str):
+    def clean_single_arpabet_phoneme_list(self, phon_list):
         """
-        Splits a phoneme sequence (of a string of phoneme with each word separated by a space) into individual phonemes based on the IPA dictionary keys.
         Parameters:
-            sequence (str): A string of phonemes (e.g. "ˈɪŋɡlɪʃ")
-        Returns:
-            list: List of list of phonemes, one nested list for each word.
+            phon_list (list(str)): The list of arpabet phoneme
         """
+        cleaned_phon = self.remove_stress_indicator_from_single_arpabet_phoneme_list(phon_list)
+        return cleaned_phon
+    
+    def split_phoneme_sequence(self):
+        """
+        Splits a the uttered phoneme sequence (of a string of phoneme with each word separated by a space) into individual phonemes based on the IPA dictionary keys.
+        """
+        sequence = self.uttered_ipa_phonemes.strip()
         i = 0
         keys = sorted(self.ipa_phonemes, key=len, reverse=True)  # Prioritize longer matches
         
@@ -582,7 +661,7 @@ class IPA:
 
         if word_phonemes:
             sequence_phonemes.append(word_phonemes)
-        return sequence_phonemes
+        self.segmented_uttered_ipa_phonemes = sequence_phonemes
     
     def evaluate_pronunciation(self, reference: list, pronunciation: list):
         """
@@ -633,7 +712,7 @@ class IPA:
                             processed_indices.add(i1)
                             i1 += 1  # Move to the next index in the reference
                             j1 += 1  # Move to the next index in the pronunciation
-                
+                    
                 if i1 > original_i1:
                     start_word_idx, start_element_idx = get_nested_position(reference, original_i1)
                     end_word_idx, end_element_idx = get_nested_position(reference, i1 - 1)
@@ -692,6 +771,129 @@ class IPA:
         
         return errors, labels
     
+    def map_boundary(self, segmented_ground_truth_list, segmented_uttered_list):
+        """
+        Maps the boundaries of each word in the ground truth to the corresponding part in the uttered list.
+        Rewrites to self.segmented_uttered_ipa_phonemes
+        Args:
+            segmented_ground_truth_list (list): A single list of phonemes, word are separed with space 
+            segmented_uttered_list (list): A single list of phonemes, word are separed with space
+        """
+        
+        alignments = pairwise2.align.globalms(
+            segmented_ground_truth_list, segmented_uttered_list, 
+            match=1,  # Score for match
+            mismatch=-1,  # Penalty for mismatch
+            open=-2,  # Penalty for opening a gap
+            extend=-1,  # Penalty for extending a gap,
+            gap_char=['-']
+        )
+        best_alignment = alignments[0]
+
+        # Extract the aligned sequences
+        aligned_ground_truth = best_alignment.seqA
+        aligned_uttered = best_alignment.seqB
+
+        # Process the alignment to group corresponding characters
+        segments = []
+        current_segment = []
+        for g_char, u_char in zip(aligned_ground_truth, aligned_uttered):
+            if g_char == " ":  # Word boundary in ground truth
+                if current_segment:  # Append collected segment
+                    segments.append(current_segment)
+
+                    current_segment = []
+            else:
+                if g_char != "-" and g_char != " ":  # Only consider characters from uttered list
+                    current_segment.append(u_char)
+
+        # Append the last segment, if any
+        if current_segment:
+            segments.append(current_segment)
+
+        # Output the segmented uttered list
+        self.segmented_uttered_ipa_phonemes = segments
+        
+    def evaluate_full_pronunciation(self):
+        """
+        Evaluates the full pronunciation of the utterance against the ground truth. 
+        self.segmented_ground_truth_ipa_phonemes and self.segmented_uttered_ipa_phonemes need to be available.
+        """
+        if len(self.segmented_ground_truth_ipa_phonemes) == 0 or len(self.segmented_uttered_ipa_phonemes) == 0:
+            raise ValueError("Segmented ground truth and uttered phonemes must be non-empty.")
+        
+        one_ground_truth = []
+        one_uttered = []
+        for word in self.segmented_ground_truth_ipa_phonemes:
+            one_ground_truth.extend(word[0])
+            one_ground_truth.append(" ")
+        for word in self.segmented_uttered_ipa_phonemes:
+            one_uttered.extend(word)
+            one_uttered.append(" ")
+
+        # correctly add spaces to uttered phonemes
+        self.map_boundary(one_ground_truth, one_uttered)
+
+        final_label_list = []
+        for reference, uttered in zip(self.segmented_ground_truth_ipa_phonemes, self.segmented_uttered_ipa_phonemes):
+            final_label_list.append(self.evaluate_pronunciation_for_word(uttered, reference))
+        return final_label_list
+    
+    def evaluate_pronunciation_for_word(self, uttered: list, reference: list):
+        """
+        Evaluates pronunciation for a word.
+        
+        Args:
+            uttered (list): A list of phonemes representing the uttered phonemes for this word.
+            reference (list): A list of list, each nested list being a possible pronunciation (ground truth) of the word.
+        
+        Returns:
+            list(tuple): Each tuple is (phoneme_label)
+        """
+        max_score = None
+        final_label_list = []
+        for ground_truth in reference:
+            score = 0
+            label_list = []
+
+            alignments = pairwise2.align.globalms(
+                ground_truth, uttered, 
+                match=1,  # Score for match
+                mismatch=-1,  # Penalty for mismatch
+                open=-2,  # Penalty for opening a gap
+                extend=-1,  # Penalty for extending a gap,
+                gap_char=['-']
+            )
+
+            # Extract the aligned sequences
+            aligned_ground_truth, aligned_uttered, _, _, _ = alignments[0]
+
+            # Iterate through the characters in the aligned sequences
+            for gt_char, utt_char in zip(aligned_ground_truth, aligned_uttered):
+                # Skip gaps in the ground truth
+                if gt_char == '-' or gt_char == ' ':
+                    continue
+
+                # Assign a label based on the tuple (gt_char, utt_char)
+                if utt_char != '-':  # Only consider matched characters, not gaps in uttered
+                    key = (gt_char, utt_char)
+                    if key in self.phoneme_pair_label and self.phoneme_pair_label[key] in [1, 2]:
+                        label = 1
+                        score += 1
+                    else:
+                        label = 0
+                else:
+                    label = 0  # Default label for unmatched characters
+
+                # Append the result as a tuple (ground_truth_char, label)
+                label_list.append((gt_char, label))
+
+            if max_score is None or score > max_score:
+                max_score = score
+                final_label_list = label_list
+        # Return the label list
+        return final_label_list
+
     def map_phonemes_to_segments(self, phoneme_labels, word):
         """
         Maps each phoneme in the phoneme set to its corresponding segment (orthography) in the word.
@@ -826,38 +1028,23 @@ class IPA:
 
         return result
     
-    def generate_segment_labels(self, ground_truth_phonemes, uttered_phonemes, transcript):
-        # this assumes that the two lists are the same in lengths
-        combined_labels = []
+    def generate_labels(self, display=True):
+        results = []
+        labels = self.evaluate_full_pronunciation()
+        for label, word in zip(labels, self.transcript.split()):
+            results.append(self.map_phonemes_to_segments(label, word))
 
-        for uttered_phons_set, ground_truth_phons_set, word in zip(uttered_phonemes.split(), self.remove_ipa_stress_markers(ground_truth_phonemes).split(), transcript.split()):
-            u_phons = self.split_phoneme_sequence(uttered_phons_set)
-            g_phons = self.split_phoneme_sequence(ground_truth_phons_set)
-            errors, labels = self.evaluate_pronunciation(g_phons, u_phons)
-            phoneme_segment_map = self.map_phonemes_to_segments(labels, word)
-            combined_labels.append(phoneme_segment_map)
-            
-        return combined_labels
+        if display:
+            self.display_ipa_phonemes_with_labels_and_segments(results, self.transcript)
+        return results    
     
-    def generate_segment_labels_from_lists(self, ground_truth_phonemes, uttered_phonemes, transcript):
-        # same as generate_segment_labels above, but takes lists (aleady segmented ipa phonemes) as input 
-        errors, labels = self.evaluate_pronunciation(ground_truth_phonemes, uttered_phonemes)
-        combined_labels = []
-        for word_phon_labels, word in zip(labels, transcript.split()):
-            phoneme_segment_map = self.map_phonemes_to_segments(word_phon_labels, word)
-            combined_labels.append(phoneme_segment_map)
-            
-        return combined_labels
-    
-    def generate_segment_labels_from_lists_for_api(self, ground_truth_phonemes, uttered_phonemes, transcript):
-        # same as generate_segment_labels above, but takes lists (aleady segmented ipa phonemes) as input 
-        errors, labels = self.evaluate_pronunciation(ground_truth_phonemes, uttered_phonemes)
-        combined_labels = []
-        for word_phon_labels, word in zip(labels, transcript.split()):
-            phoneme_segment_map = self.map_phonemes_to_segments_for_api(word_phon_labels, word)
-            combined_labels.append(phoneme_segment_map)
-            
-        return combined_labels
+    def generate_labels_for_api(self):
+        results = []
+        labels = self.evaluate_full_pronunciation()
+        for label, word in zip(labels, self.transcript.split()):
+            results.append(self.map_phonemes_to_segments_for_api(label, word))
+
+        return results    
     
     def handle_label_shenanigans(self, labels):
         """
@@ -964,17 +1151,20 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         # Decode the phonemes
         predicted_ids = torch.argmax(logits, dim=-1)
         uttered_phonemes = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0] 
-        ground_truth_phonemes_split = IPA().convert_words_into_phonemes(transcript.split())
-       
-        uttered_phonemes = IPA().clean_phonemes(uttered_phonemes)
-        uttered_phonemes_split = IPA().split_phoneme_sequence(uttered_phonemes)
-        yet_another_end_time = time.time() 
-        print(f"Time from transcript to finish generating labels: {yet_another_end_time - another_end_time} seconds")
-        print("Uttered:", uttered_phonemes_split)
-        print("Ground :", ground_truth_phonemes_split)
+        end_time = time.time()
+        print("Time taken for inference:", end_time - start_time)
+        
+        # init PronunciationAssessment instance
+        cur = PronunciationAssessment(transcript, uttered_phonemes)
+        cur.convert_transcript_into_phonemes()
+        cur.clean_ipa_phonemes()
+        cur.split_phoneme_sequence()
+        print(cur.uttered_ipa_phonemes)
+        print(cur.segmented_ground_truth_ipa_phonemes)
+        print(cur.segmented_uttered_ipa_phonemes)
 
-        labels = IPA().generate_segment_labels_from_lists_for_api(ground_truth_phonemes_split, uttered_phonemes_split, transcript)
-
+        # generate the final labels
+        labels = cur.generate_labels_for_api()
         return JSONResponse(content={"labels": labels})
     
     except Exception as e:
@@ -1023,7 +1213,7 @@ async def transcribe(audio: UploadFile):
         logging.error(f"Error during transcription: {e}")
         raise HTTPException(status_code=500, detail="An error occurred during processing.")
 
-# if __name__ == '__main__':
-#     port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
-#     logging.info(f"Starting server on PORT {port}")
-#     uvicorn.run("app:app", host="0.0.0.0", port=int(port), log_level="info")
+if __name__ == '__main__':
+    port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
+    logging.info(f"Starting server on PORT {port}")
+    uvicorn.run("app:app", host="0.0.0.0", port=int(port), log_level="info")
