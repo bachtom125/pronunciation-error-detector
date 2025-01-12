@@ -22,6 +22,8 @@ from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 from pydub import AudioSegment
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
+import asyncio
+from cachetools import TTLCache
 
 # Set the Numba cache directory to a writable location
 os.environ["NUMBA_CACHE_DIR"] = "/tmp"
@@ -41,7 +43,8 @@ model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
 model.eval()
 
 # Check device availability
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+device = 'cpu' # TEMP for testing
 model.to(device)
 
 whisper_processor = AutoProcessor.from_pretrained("openai/whisper-tiny.en")
@@ -53,48 +56,72 @@ whisper_model.to(device)
 # Section: Utils
 # =====================================
 
-async def process_audio(audio, device, return_input_values=True):
+# Initialize a cache with a 5-minute TTL and 100 items max
+audio_cache = TTLCache(maxsize=100, ttl=300)
+cache_lock = asyncio.Lock()  # To prevent race conditions
+
+async def process_audio(audio, device):
     """
-    Process an uploaded .m4a audio file and prepare input for the model.
+    Process an uploaded audio file and prepare input for the model.
 
     Args:
-        audio: The uploaded audio file (e.g., from a web request).
+        audio: The uploaded audio file.
         device: The device (e.g., 'cuda' or 'cpu') to move tensors to.
-        return_input_values: Whether to return the processed input tensor.
-    
+
     Returns:
-        audio_input: NumPy array of the audio samples.
-        input_values: Processed input tensor for the model.
+        cache_entry: A dictionary containing processed audio and model input.
     """
-    # Read audio bytes
-    audio_bytes = BytesIO(await audio.read())
+    filename = audio.filename
 
-    # Load the .m4a file using pydub
-    audio_segment = AudioSegment.from_file(audio_bytes, format="m4a")
+    # Check cache for processed audio
+    if filename in audio_cache:
+        logging.info(f"Audio '{filename}' found in cache.")
+        return audio_cache[filename]
 
-    # Convert the audio to a NumPy array
-    audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+    async with cache_lock:  # Prevent race conditions during cache writes
+        if filename in audio_cache:  # Double-check after acquiring lock
+            logging.info(f"Audio '{filename}' found in cache after lock.")
+            return audio_cache[filename]
 
-    # Normalize the audio to [-1.0, 1.0]
-    max_val = np.iinfo(np.int16).max  # Maximum value for 16-bit PCM
-    audio_samples /= max_val
+        logging.info(f"Processing audio '{filename}'.")
 
-    # If the audio has multiple channels, average them to mono
-    if audio_segment.channels > 1:
-        audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
+        # Read and preprocess the audio
+        audio_bytes = BytesIO(await audio.read())
+        audio_segment = AudioSegment.from_file(audio_bytes, format="m4a")
+        audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+        max_val = np.iinfo(np.int16).max
+        audio_samples /= max_val
 
-    # Resample the audio to 16kHz using librosa
-    audio_input = librosa.resample(audio_samples, orig_sr=audio_segment.frame_rate, target_sr=16000)
-    if not return_input_values:
-        return audio_input
-    
-    # Process the audio using the processor
-    input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values
+        if audio_segment.channels > 1:
+            audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
 
-    # Move the tensor to the specified device
-    input_values = input_values.to(device)
-    
-    return audio_input, input_values
+        audio_input = librosa.resample(audio_samples, orig_sr=audio_segment.frame_rate, target_sr=16000)
+        input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values.to(device)
+
+        # Cache the processed audio
+        cache_entry = {"audio_input": audio_input, "input_values": input_values, "ssl_logits": None}
+        audio_cache[filename] = cache_entry
+        return cache_entry
+
+async def run_ssl_inference(filename, input_values):
+    """
+    Run SSL model inference in the background and store the results in the cache.
+
+    Args:
+        filename: The name of the audio file.
+        input_values: The processed input tensor for the SSL model.
+    """
+    try:
+        logging.info(f"Running SSL inference for '{filename}' in the background.")
+        with torch.no_grad():
+            ssl_output = model(input_values).logits
+
+        # Update the cache with the SSL inference result
+        if filename in audio_cache:
+            audio_cache[filename]["ssl_logits"] = ssl_output
+            logging.info(f"SSL inference for '{filename}' completed and cached.")
+    except Exception as e:
+        logging.error(f"Error during SSL inference for '{filename}': {e}")
 
 def transcribe_into_English(audio_input):
     # Load audio file
@@ -1131,22 +1158,23 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
 
     # Load and preprocess the audio
     try:
-        audio_input, input_values = await process_audio(audio, device)
+        cache_entry = await process_audio(audio, device)
+        input_values = cache_entry["input_values"]
         
+        # Ensure SSL inference is completed
+        logits = cache_entry.get("ssl_logits")
+        if logits is None:
+            logging.info(f"SSL inference not cached for '{filename}', running now.")
+            with torch.no_grad():
+                logits = model(input_values).logits
+                cache_entry["ssl_logits"] = logits
+
         end_time = time.time()
         print(f"Time from call to finish processing audio: {end_time - start_time} seconds")
         
-        # clean transcript
-        if transcript.lower().strip() == "//":
-            transcript = transcribe_into_English(audio_input)
-            print("HERE1")
         transcript = clean_text(transcript).strip()
         another_end_time = time.time()
         logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
-
-        # Perform inference
-        with torch.no_grad():
-            logits = model(input_values).logits
 
         # Decode the phonemes
         predicted_ids = torch.argmax(logits, dim=-1)
@@ -1197,7 +1225,13 @@ async def transcribe(audio: UploadFile):
 
     # Load and preprocess the audio
     try:
-        audio_input = await process_audio(audio, device, False)
+        # Process the audio
+        cache_entry = await process_audio(audio, device)
+        audio_input = cache_entry["audio_input"]
+        input_values = cache_entry["input_values"]
+
+        # Start SSL inference in the background
+        asyncio.create_task(run_ssl_inference(audio.filename, input_values))
 
         # Get transcript
         end_time = time.time()
