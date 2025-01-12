@@ -1171,9 +1171,9 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
 
         end_time = time.time()
         print(f"Time from call to finish processing audio: {end_time - start_time} seconds")
-        
+
+        start_time = time.time()
         transcript = clean_text(transcript).strip()
-        another_end_time = time.time()
         logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
 
         # Decode the phonemes
@@ -1182,6 +1182,7 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         end_time = time.time()
         print("Time taken for inference:", end_time - start_time)
         
+        start_time = time.time()
         # init PronunciationAssessment instance
         cur = PronunciationAssessment(transcript, uttered_phonemes)
         cur.convert_transcript_into_phonemes()
@@ -1193,6 +1194,8 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
 
         # generate the final labels
         labels = cur.generate_labels_for_api()
+        end_time = time.time()
+        print("Time taken for label generation:", end_time - start_time)
         return JSONResponse(content={"labels": labels})
     
     except Exception as e:
