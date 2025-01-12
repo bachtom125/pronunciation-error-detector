@@ -1174,7 +1174,6 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
 
         start_time = time.time()
         transcript = clean_text(transcript).strip()
-        logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
 
         # Decode the phonemes
         predicted_ids = torch.argmax(logits, dim=-1)
