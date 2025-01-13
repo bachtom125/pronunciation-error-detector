@@ -62,11 +62,12 @@ cache_lock = asyncio.Lock()  # To prevent race conditions
 
 import os
 from tempfile import NamedTemporaryFile
+import subprocess
 
 async def process_audio(audio, device):
     """
     Process an uploaded audio file and prepare input for the model.
-    Converts audio to WAV format prior to processing.
+    Converts audio to WAV format using FFmpeg prior to processing.
 
     Args:
         audio: The uploaded audio file.
@@ -89,22 +90,38 @@ async def process_audio(audio, device):
 
         logging.info(f"Processing audio '{filename}'.")
 
-        # Read and preprocess the audio
-        audio_bytes = BytesIO(await audio.read())
-        
-        # Convert to WAV format
-        audio_segment = AudioSegment.from_file(audio_bytes, format="m4a")
-        with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
-            temp_wav_path = temp_wav.name
-            audio_segment.export(temp_wav_path, format="wav")
-        
+        # Read the audio file into a temporary file
+        with NamedTemporaryFile(delete=False, suffix=".m4a") as temp_m4a:
+            temp_m4a_path = temp_m4a.name
+            temp_m4a.write(await audio.read())
+
+        # Convert M4A to WAV using FFmpeg
+        temp_wav_path = temp_m4a_path.replace(".m4a", ".wav")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-i", temp_m4a_path,  # Input file
+                    "-ar", "16000",                 # Resample to 16kHz
+                    "-ac", "1",                     # Convert to mono
+                    temp_wav_path                   # Output file
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+        except subprocess.CalledProcessError as e:
+            logging.error(f"FFmpeg conversion failed: {e.stderr.decode()}")
+            raise HTTPException(status_code=500, detail="Failed to process audio file.")
+        finally:
+            os.remove(temp_m4a_path)  # Clean up the temporary M4A file
+
         try:
             # Load the WAV audio for further processing
             audio_segment = AudioSegment.from_file(temp_wav_path, format="wav")
             audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
             max_val = np.iinfo(np.int16).max
             audio_samples /= max_val
-            
+
             if audio_segment.channels > 1:
                 audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
 
@@ -115,7 +132,7 @@ async def process_audio(audio, device):
             cache_entry = {"audio_input": audio_input, "input_values": input_values, "ssl_logits": None}
             audio_cache[filename] = cache_entry
             return cache_entry
-        
+
         finally:
             # Clean up the temporary WAV file
             os.remove(temp_wav_path)
@@ -1238,7 +1255,6 @@ async def transcribe(audio: UploadFile):
     # Validate file extension
     allowed_extensions = {"wav", "mp3", "m4a"}
     filename = audio.filename.lower()
-    start_time = time.time()
     if not filename.endswith(tuple(allowed_extensions)):
         raise HTTPException(
             status_code=400,
@@ -1248,6 +1264,7 @@ async def transcribe(audio: UploadFile):
     # Load and preprocess the audio
     try:
         # Process the audio
+        start_time = time.time()
         cache_entry = await process_audio(audio, device)
         audio_input = cache_entry["audio_input"]
         input_values = cache_entry["input_values"]
