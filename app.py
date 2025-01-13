@@ -103,7 +103,7 @@ async def process_audio(audio, device):
             audio_segment = AudioSegment.from_file(temp_wav_path, format="wav")
             audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
             max_val = np.iinfo(np.int16).max
-            audio_samples /= max_val
+            # audio_samples /= max_val
 
             if audio_segment.channels > 1:
                 audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
