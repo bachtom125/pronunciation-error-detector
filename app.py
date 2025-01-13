@@ -909,8 +909,10 @@ class PronunciationAssessment:
                         score += 1
                     else:
                         label = 0
+                        score -= 1
                 else:
                     label = 0  # Default label for unmatched characters
+                    score -= 1
 
                 # Append the result as a tuple (ground_truth_char, label)
                 label_list.append((gt_char, label))
