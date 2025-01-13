@@ -60,9 +60,13 @@ whisper_model.to(device)
 audio_cache = TTLCache(maxsize=100, ttl=300)
 cache_lock = asyncio.Lock()  # To prevent race conditions
 
+import os
+from tempfile import NamedTemporaryFile
+
 async def process_audio(audio, device):
     """
     Process an uploaded audio file and prepare input for the model.
+    Converts audio to WAV format prior to processing.
 
     Args:
         audio: The uploaded audio file.
@@ -87,21 +91,35 @@ async def process_audio(audio, device):
 
         # Read and preprocess the audio
         audio_bytes = BytesIO(await audio.read())
+        
+        # Convert to WAV format
         audio_segment = AudioSegment.from_file(audio_bytes, format="m4a")
-        audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
-        max_val = np.iinfo(np.int16).max
-        audio_samples /= max_val
+        with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
+            temp_wav_path = temp_wav.name
+            audio_segment.export(temp_wav_path, format="wav")
+        
+        try:
+            # Load the WAV audio for further processing
+            audio_segment = AudioSegment.from_file(temp_wav_path, format="wav")
+            audio_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+            max_val = np.iinfo(np.int16).max
+            audio_samples /= max_val
 
-        if audio_segment.channels > 1:
-            audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
+            if audio_segment.channels > 1:
+                audio_samples = audio_samples.reshape(-1, audio_segment.channels).mean(axis=1)
 
-        audio_input = librosa.resample(audio_samples, orig_sr=audio_segment.frame_rate, target_sr=16000)
-        input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values.to(device)
+            audio_input = librosa.resample(audio_samples, orig_sr=audio_segment.frame_rate, target_sr=16000)
+            input_values = processor(audio_input, return_tensors="pt", sampling_rate=16000).input_values.to(device)
 
-        # Cache the processed audio
-        cache_entry = {"audio_input": audio_input, "input_values": input_values, "ssl_logits": None}
-        audio_cache[filename] = cache_entry
-        return cache_entry
+            # Cache the processed audio
+            cache_entry = {"audio_input": audio_input, "input_values": input_values, "ssl_logits": None}
+            audio_cache[filename] = cache_entry
+            return cache_entry
+        
+        finally:
+            # Clean up the temporary WAV file
+            os.remove(temp_wav_path)
+
 
 async def run_ssl_inference(filename, input_values):
     """
