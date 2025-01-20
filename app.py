@@ -1225,8 +1225,8 @@ async def predict(audio: UploadFile, transcript: str = Form(...)):
         cur.clean_ipa_phonemes()
         cur.split_phoneme_sequence()
         print(cur.uttered_ipa_phonemes)
-        print(cur.segmented_ground_truth_ipa_phonemes)
-        print(cur.segmented_uttered_ipa_phonemes)
+        # print(cur.segmented_ground_truth_ipa_phonemes)
+        # print(cur.segmented_uttered_ipa_phonemes)
 
         # generate the final labels
         labels = cur.generate_labels_for_api()
