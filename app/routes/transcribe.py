@@ -33,7 +33,6 @@ from utils.general_utils import clean_text
 
 router = APIRouter()
 
-service = TranscriptionService()
 @router.post("/transcribe", summary="Trancribe audio into English")
 async def transcribe(audio: UploadFile):
     """
@@ -46,6 +45,7 @@ async def transcribe(audio: UploadFile):
         JSONResponse: Contains the transcript.
     """
     try:
+        service = TranscriptionService()
         # Call the service to process and transcribe the audio
         transcript = await service.transcribe_audio(audio)
         transcript = clean_text(transcript).strip()

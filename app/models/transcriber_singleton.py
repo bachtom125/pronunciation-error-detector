@@ -4,6 +4,8 @@ from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 from utils.general_utils import process_audio
 import asyncio
 import librosa
+import time
+import logging
 
 class TranscriberSingleton:
     _instance = None  
@@ -19,7 +21,7 @@ class TranscriberSingleton:
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = "cpu"
         # Load processor and model
-        print(f"Loading Whisper processor and model into {device}...")  # This will only happen once
+        print(f"Loading Whisper processor and model into {self.device}...")  # This will only happen once
         self.processor = AutoProcessor.from_pretrained(model_name)
         self.model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name)
         self.model.eval()
@@ -27,14 +29,23 @@ class TranscriberSingleton:
 
     def transcribe_into_English(self, audio_input):
         # Load audio file
+        start_time = time.time()
         audio_input = self.processor(audio_input, sampling_rate=16000, return_tensors="pt", language="en").to(self.device)
+        end_time = time.time()
+        logging.info(f"Time for processor(): {end_time - start_time} seconds")
 
+        start_time = time.time()
         # Perform transcription
         with torch.no_grad():
             generated_ids = self.model.generate(audio_input.input_features)
-
+        
+        end_time = time.time()
+        logging.info(f"Time for inference: {end_time - start_time} seconds")
         # Decode the transcription
+        start_time = time.time()
         transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        end_time = time.time()
+        logging.info(f"Time for decoder(): {end_time - start_time} seconds")
         return transcription.lower().strip()
     
     def transcribe_from_file_path(self, file_path, target_sr=16000):

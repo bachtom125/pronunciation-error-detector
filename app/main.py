@@ -43,6 +43,7 @@ def home():
 
 app.include_router(transcriber_router, tags=["transcribe"])
 app.include_router(pronunciation_evaluation_router, tags=["pronunciation_evaluation"])
+
 if __name__ == '__main__':
     port = os.environ.get("PORT", 10000)  # Default to 10000 if PORT is not set
     logging.info(f"Starting server on PORT {port}")

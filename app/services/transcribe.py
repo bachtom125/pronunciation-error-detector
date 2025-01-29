@@ -44,10 +44,11 @@ class TranscriptionService:
             # Step 3: Get the transcript using Whisper
             end_time = time.time()
             logging.info(f"Time from call to finish processing audio: {end_time - start_time} seconds")
+            start_time = time.time()
             transcript = self.transcriber_model.transcribe_into_English(audio_input)
             # Log processing time
-            another_end_time = time.time()
-            logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {another_end_time - end_time} seconds")
+            end_time = time.time()
+            logging.info(f"Transcript: {transcript}, Time taken from processed audio to finish transcription: {end_time - start_time} seconds")
 
             return transcript
 
